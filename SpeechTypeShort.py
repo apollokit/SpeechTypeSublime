@@ -2,13 +2,13 @@ import os
 import re
 import sublime
 import sublime_plugin
-from .Functions import camelcaseToUnderscore
+from .Functions import camelcase_to_underscore
 
 
 PLUGIN_NAME = __package__
 PLUGIN_DIR = "Packages/%s" % PLUGIN_NAME
 PLUGIN_SETTINGS = PLUGIN_NAME + '.sublime-settings'
-PLUGIN_CMD = camelcaseToUnderscore(PLUGIN_NAME)
+PLUGIN_CMD = camelcase_to_underscore(PLUGIN_NAME)
 
 settings = None
 
@@ -27,7 +27,7 @@ def plugin_loaded():
     settings = sublime.load_settings(PLUGIN_SETTINGS)
 
 
-class typeShortCommand(sublime_plugin.TextCommand):
+class type_short_command(sublime_plugin.TextCommand):
     global settings
 
     def run(self, edit, regions=[], replacement=''):
@@ -76,7 +76,7 @@ class typeShortCommand(sublime_plugin.TextCommand):
 
         return True
 
-    def reverseSortRegions(self, regions):
+    def reverse_sort_regions(self, regions):
         """
         sort `regions` in a descending order
 
@@ -89,7 +89,7 @@ class typeShortCommand(sublime_plugin.TextCommand):
         return sorted(regions, key=lambda region: region[0], reverse=True)
 
 
-class typeShortListener(sublime_plugin.EventListener):
+class type_short_listener(sublime_plugin.EventListener):
     global settings, syntaxInfos
 
     def __init__(self):
@@ -130,9 +130,11 @@ class typeShortListener(sublime_plugin.EventListener):
 
         # generate valid source scopes
         sourceScopes = (
-            set(self.getCurrentSyntax(v)) |
+            set(self.get_current_syntax(v)) |
             set(self.sourceScopeRegex.findall(' '.join(scopesInSeletion)))
         )
+
+        print('hey')
 
         # try possible working bindings
         for binding in settings.get('bindings', []):
@@ -143,7 +145,7 @@ class typeShortListener(sublime_plugin.EventListener):
 
         return True
 
-    def getCurrentSyntax(self, view):
+    def get_current_syntax(self, view):
         """
         get the syntax file name and the syntax name which is on the
         bottom-right corner of ST
@@ -159,7 +161,7 @@ class typeShortListener(sublime_plugin.EventListener):
         if syntaxFile not in syntaxInfos:
             syntaxInfos[syntaxFile] = {
                 'fileName' : os.path.splitext(os.path.basename(syntaxFile))[0],
-                'syntaxName' : self.findSyntaxName(syntaxFile),
+                'syntaxName' : self.find_syntax_name(syntaxFile),
             }
 
         return [
@@ -168,7 +170,7 @@ class typeShortListener(sublime_plugin.EventListener):
             if isinstance(v, str)
         ]
 
-    def findSyntaxName(self, syntaxFile):
+    def find_syntax_name(self, syntaxFile):
         """
         find the name section in the give syntax file path
 
@@ -192,7 +194,7 @@ class typeShortListener(sublime_plugin.EventListener):
 
         return matches.group(1).strip()
 
-    def doReplace(self, view, binding, lastInsertedChars):
+    def do_replace(self, view, binding, lastInsertedChars):
         """
         try to do replacement with given a binding and last inserted chars
 
