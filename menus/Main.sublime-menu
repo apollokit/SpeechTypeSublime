@@ -7,20 +7,20 @@
         "mnemonic": "P",
         "id": "package-settings",
         "children": [{
-            "caption": "SpeechTypeShort",
+            "caption": "SpeechTypeSublime",
             "children": [{
                 "caption": "-"
             }, {
                 "command": "open_file",
                 "caption": "Settings – Default",
                 "args": {
-                    "file": "${packages}/sublime-SpeechTypeShort/SpeechTypeShort.sublime-settings"
+                    "file": "${packages}/SpeechTypeSublime/SpeechTypeSublime.sublime-settings"
                 }
             }, {
                 "command": "open_file",
                 "caption": "Settings – User",
                 "args": {
-                    "file": "${packages}/User/SpeechTypeShort.sublime-settings"
+                    "file": "${packages}/User/SpeechTypeSublime.sublime-settings"
                 }
             }, {
                 "caption": "-"
@@ -28,13 +28,13 @@
                 "caption": "README",
                 "command": "open_file",
                 "args": {
-                    "file": "${packages}/sublime-SpeechTypeShort/README.md"
+                    "file": "${packages}/SpeechTypeSublime/README.md"
                 }
             }, {
                 "caption": "Changelog",
                 "command": "open_file",
                 "args": {
-                    "file": "${packages}/sublime-SpeechTypeShort/CHANGELOG.md"
+                    "file": "${packages}/SpeechTypeSublime/CHANGELOG.md"
                 }
             }, {
                 "caption": "-"

@@ -27,10 +27,12 @@ def plugin_loaded():
     settings = sublime.load_settings(PLUGIN_SETTINGS)
 
 
-class type_short_command(sublime_plugin.TextCommand):
+class SpeechTypeSublimeCommand(sublime_plugin.TextCommand):
     global settings
+    print('rinnujhgljkkjl')
 
     def run(self, edit, regions=[], replacement=''):
+        print('rinnunn...')
         v = sublime.active_window().active_view()
 
         cursorPlaceholder = settings.get('cursor_placeholder', None)
@@ -51,7 +53,7 @@ class type_short_command(sublime_plugin.TextCommand):
                 replacement = replacement.replace(cursorPlaceholder, '', 1)
 
         # regions need to be replaced in a reversed sorted order
-        for region in self.reverseSortRegions(regions):
+        for region in self.reverse_sort_regions(regions):
             v.replace(
                 edit,
                 sublime.Region(region[0], region[1]),
@@ -89,7 +91,7 @@ class type_short_command(sublime_plugin.TextCommand):
         return sorted(regions, key=lambda region: region[0], reverse=True)
 
 
-class type_short_listener(sublime_plugin.EventListener):
+class SpeechTypeSublimeListener(sublime_plugin.EventListener):
     global settings, syntaxInfos
 
     def __init__(self):
@@ -114,6 +116,9 @@ class type_short_listener(sublime_plugin.EventListener):
         if historyCmd[0] == PLUGIN_CMD:
             return False
 
+        print(v.command_history(0))
+        print(v.command_history(1))
+
         # no action if we are not typing
         historyCmd = v.command_history(0)
         if historyCmd[0] != 'insert':
@@ -134,12 +139,16 @@ class type_short_listener(sublime_plugin.EventListener):
             set(self.sourceScopeRegex.findall(' '.join(scopesInSeletion)))
         )
 
-        print('hey')
-
         # try possible working bindings
         for binding in settings.get('bindings', []):
+            print(sourceScopes)
             if sourceScopes & set(binding['syntax_list']):
-                success = self.doReplace(v, binding, lastInsertedChars)
+                success = self.do_replace(v, binding, lastInsertedChars)
+                print(binding)
+                print(sourceScopes)
+                print(success)
+                from datetime import datetime
+                print(datetime.utcnow())
                 if success is True:
                     return True
 
@@ -235,4 +244,4 @@ class type_short_listener(sublime_plugin.EventListener):
                     'replacement' : replacement,
                 })
 
-        return True
+        return False
