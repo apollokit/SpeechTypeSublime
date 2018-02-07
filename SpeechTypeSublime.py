@@ -1,9 +1,11 @@
 import os
 import re
+from collections import namedtuple
+
 import sublime
 import sublime_plugin
-from .Functions import camelcase_to_underscore
 
+from .Functions import camelcase_to_underscore
 
 PLUGIN_NAME = __package__
 PLUGIN_DIR = "Packages/%s" % PLUGIN_NAME
@@ -21,6 +23,71 @@ settings = None
 syntaxInfos = {}
 
 
+def check_any(keywords,string):
+    for w in keywords:
+        if w in string:
+            return True, w
+
+    return False, None
+
+
+class SpeechType:
+    NO_CMD = 0
+    TRANSLATE = 1
+
+    translate = namedtuple('translate_cmd', 'replacement, num_chars')
+    parse_words = ['parse','horse','parts',"par's",'kars','purse']
+
+    def __init__(self,bindings):
+        self.buffer = ''
+        self.bindings = bindings
+
+    def add_chars(self,chars):
+        self.buffer += chars.lower()
+
+        print('self.buffer')
+        print(self.buffer)
+
+    def parse(self,verbose=False):
+        if 'clear buffer' in self.buffer:
+            self.buffer = ''
+            if verbose: print('cleared buffer')
+            return self.NO_CMD, None
+
+        cmd=self.buffer
+        match, word = check_any(self.parse_words,cmd)
+        if match:
+            b = cmd.replace(word,'')
+
+            if 'letters' in cmd:
+                if verbose: print('replace: '+cmd)
+                
+                b = b.replace(' ','')
+                b = b.replace('letters','')
+                
+                if len(b) < 1:
+                    return self.NO_CMD, None
+                
+                for key in self.bindings['letters'].keys():
+                    b = b.replace(key,self.bindings['letters'][key])
+
+                if verbose: print('with: '+b)
+
+                self.buffer = ''
+                return self.TRANSLATE, self.translate(replacement=b,num_chars=len(cmd))
+
+            else:
+                self.buffer = ''
+                if verbose: print("couldn't parse: "+b)
+                if verbose: print('cleared buffer')
+                return self.NO_CMD, None 
+
+        return self.NO_CMD, None
+
+
+
+
+
 def plugin_loaded():
     global settings
 
@@ -29,10 +96,8 @@ def plugin_loaded():
 
 class SpeechTypeSublimeCommand(sublime_plugin.TextCommand):
     global settings
-    print('rinnujhgljkkjl')
 
     def run(self, edit, regions=[], replacement=''):
-        print('rinnunn...')
         v = sublime.active_window().active_view()
 
         cursorPlaceholder = settings.get('cursor_placeholder', None)
@@ -98,6 +163,14 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         self.sourceScopeRegex = re.compile(r'\b(?:source|text)\.[^\s]+')
         self.nameXmlRegex = re.compile(r'<key>name</key>\s*<string>(.*?)</string>', re.DOTALL)
         self.nameYamlRegex = re.compile(r'^name\s*:(.*)$', re.MULTILINE)
+        
+        settings2 = sublime.load_settings(PLUGIN_SETTINGS)
+        # print('yo1') 
+        # print(settings.get('bindings','s'))
+        self.speech_type = SpeechType(settings2.get('bindings',[])[1])
+        # self.speech_type = SpeechType([])
+       
+        print('yo2')
 
     def on_modified(self, view):
         """
@@ -112,12 +185,12 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         v = sublime.active_window().active_view()
 
         # fix the issue that breaks functionality for undo/soft_undo
-        historyCmd = v.command_history(1)
+        historyCmd = v.command_history(1)  # this is from the redo stack
         if historyCmd[0] == PLUGIN_CMD:
             return False
 
-        print(v.command_history(0))
-        print(v.command_history(1))
+        # print(v.command_history(0))
+        # print(v.change_count())
 
         # no action if we are not typing
         historyCmd = v.command_history(0)
@@ -126,9 +199,13 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         # get the last inserted chars
         lastInsertedChars = historyCmd[1]['characters']
 
+        # on_modified gets called for every single character addition, so we should only grab the last character to be added. 
+        if len(lastInsertedChars) > 0:
+            self.speech_type.add_chars(lastInsertedChars[-1])
+
         # collect scopes from the selection
         # we expect the fact that most regions would have the same scope
-        scopesInSeletion = {
+        scopesInSelection = {
             v.scope_name(region.begin()).rstrip()
             for region in v.sel()
         }
@@ -136,21 +213,28 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         # generate valid source scopes
         sourceScopes = (
             set(self.get_current_syntax(v)) |
-            set(self.sourceScopeRegex.findall(' '.join(scopesInSeletion)))
+            set(self.sourceScopeRegex.findall(' '.join(scopesInSelection)))
         )
 
         # try possible working bindings
         for binding in settings.get('bindings', []):
-            print(sourceScopes)
+
             if sourceScopes & set(binding['syntax_list']):
-                success = self.do_replace(v, binding, lastInsertedChars)
-                print(binding)
-                print(sourceScopes)
-                print(success)
-                from datetime import datetime
-                print(datetime.utcnow())
-                if success is True:
-                    return True
+
+                cmd, args = self.speech_type.parse(verbose=True)
+
+                if cmd:
+                    if cmd == SpeechType.TRANSLATE:
+                        self.do_replace(v, args.replacement, args.num_chars)
+
+                # success = self.do_replace_old(v, binding, lastInsertedChars)
+                
+                
+                # print(binding)
+                # print(sourceScopes)
+                # print(success)
+                # from datetime import datetime
+                # print(datetime.utcnow())
 
         return True
 
@@ -203,7 +287,7 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
 
         return matches.group(1).strip()
 
-    def do_replace(self, view, binding, lastInsertedChars):
+    def do_replace_old(self, view, binding, lastInsertedChars):
         """
         try to do replacement with given a binding and last inserted chars
 
@@ -227,11 +311,17 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
             regionsToBeReplaced = []
 
             # iterate each region
+            # view.sel() returns all the regions for the carets (selections) that currently exist in the file, so you can do replacement at multiple carets
             for region in view.sel():
+                # print('regions')
+                # print(region.begin())
+                # print(region.end())
                 checkRegion = sublime.Region(
                     region.begin() - len(search),
                     region.end()
                 )
+                # print('substr(checkRegion)')
+                # print(view.substr(checkRegion))
                 if view.substr(checkRegion) == search:
                     regionsToBeReplaced.append((
                         checkRegion.begin(),
@@ -245,3 +335,36 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
                 })
 
         return False
+
+    def do_replace(self, view, replacement, num_chars_to_replace):
+
+        regionsToBeReplaced = []
+
+        # iterate over each selected region
+        # view.sel() returns all the regions for the carets (selections) that currently exist in the file, so you can do replacement at multiple carets
+        for region in view.sel():
+            # print('regions')
+            # print(region.begin())
+            # print(region.end())
+            checkRegion = sublime.Region(
+                region.begin() - num_chars_to_replace,
+                region.end()
+            )
+
+            regionsToBeReplaced.append((
+                    checkRegion.begin(),
+                    checkRegion.end()
+                ))
+            # print('substr(checkRegion)')
+            # print(view.substr(checkRegion))
+            # if view.substr(checkRegion) == search:
+            #     regionsToBeReplaced.append((
+            #         checkRegion.begin(),
+            #         checkRegion.end()
+            #     ))
+
+        if regionsToBeReplaced:
+            return view.run_command(PLUGIN_CMD, {
+                'regions'     : regionsToBeReplaced,
+                'replacement' : replacement,
+            })
