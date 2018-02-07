@@ -35,12 +35,17 @@ class SpeechType:
     NO_CMD = 0
     TRANSLATE = 1
 
-    translate = namedtuple('translate_cmd', 'replacement, num_chars')
+    CMD_HIST_SIZE = 20
+
+    translate_cmd = namedtuple('translate_cmd', 'replacement, num_chars')
+    insert_cmd = namedtuple('insert_cmd', 'replacement')
+
     parse_words = ['parse','horse','parts',"par's",'kars','purse']
 
     def __init__(self,bindings):
         self.buffer = ''
         self.bindings = bindings
+        self.cmd_history = []
 
     def add_chars(self,chars):
         self.buffer += chars.lower()
@@ -48,12 +53,31 @@ class SpeechType:
         print('self.buffer')
         print(self.buffer)
 
-    def parse(self,verbose=False):
-        if 'clear buffer' in self.buffer:
-            self.buffer = ''
-            if verbose: print('cleared buffer')
-            return self.NO_CMD, None
+    def add_to_cmd_hist(self,cmd):
 
+        while len(self.cmd_history) > self.CMD_HIST_SIZE:
+            self.cmd_history.pop()
+            
+        self.cmd_history.insert(0,cmd)
+
+
+
+
+    def parse(self,verbose=False):
+
+        # Quick commands
+        if 'clear' in self.buffer:
+            if verbose: print('cleared buffer')
+            scrubber = self.translate_cmd(replacement='',num_chars=len(self.buffer))
+            self.buffer = ''
+            return [scrubber]
+        elif 'repeat' in self.buffer:
+            if verbose: print('repeated last command')
+            scrubber = self.translate_cmd(replacement='',num_chars=len(self.buffer))
+            self.buffer = ''
+            return [scrubber,self.cmd_history[-1]]
+
+        # detailed, parsed commands
         cmd=self.buffer
         match, word = check_any(self.parse_words,cmd)
         if match:
@@ -74,15 +98,22 @@ class SpeechType:
                 if verbose: print('with: '+b)
 
                 self.buffer = ''
-                return self.TRANSLATE, self.translate(replacement=b,num_chars=len(cmd))
+                trans = self.translate_cmd(replacement=b,num_chars=len(cmd))
+                
+                # and a vanilla insert to the command history
+                insert_b = b.replace('\n','')
+                insert = self.insert_cmd(replacement=insert_b)
+                self.add_to_cmd_hist(insert)
+                
+                return [trans]
 
             else:
                 self.buffer = ''
                 if verbose: print("couldn't parse: "+b)
                 if verbose: print('cleared buffer')
-                return self.NO_CMD, None 
+                return None 
 
-        return self.NO_CMD, None
+        return None
 
 
 
@@ -119,11 +150,23 @@ class SpeechTypeSublimeCommand(sublime_plugin.TextCommand):
 
         # regions need to be replaced in a reversed sorted order
         for region in self.reverse_sort_regions(regions):
-            v.replace(
-                edit,
-                sublime.Region(region[0], region[1]),
-                replacement
-            )
+            # if for only inserting and not actually replacing any characters, we need to use the insert method. Otherwise the text that we insert will end up selected in the text editor
+            if (region[1] - region[0]) == 0:
+                v.insert(edit,region[0],replacement)
+            
+            elif (region[1] - region[0]) > 0:
+                v.replace(
+                    edit,
+                    sublime.Region(region[0], region[1]),
+                    replacement
+                )
+            else:
+                raise Exception
+
+            # print('region[0]')
+            # print(region[0])
+            # print(region[1])
+            # print(cursorFixedOffset)
 
             # correct cursor positions
             if cursorFixedOffset < 0:
@@ -221,11 +264,14 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
 
             if sourceScopes & set(binding['syntax_list']):
 
-                cmd, args = self.speech_type.parse(verbose=True)
+                cmds = self.speech_type.parse(verbose=True)
 
-                if cmd:
-                    if cmd == SpeechType.TRANSLATE:
-                        self.do_replace(v, args.replacement, args.num_chars)
+                if cmds:
+                    for cmd in cmds:
+                        if type(cmd) == SpeechType.translate_cmd:
+                            self.do_replace(v, cmd.replacement, cmd.num_chars)
+                        if type(cmd) == SpeechType.insert_cmd:
+                            self.do_replace(v, cmd.replacement, 0)
 
                 # success = self.do_replace_old(v, binding, lastInsertedChars)
                 
@@ -287,54 +333,6 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
 
         return matches.group(1).strip()
 
-    def do_replace_old(self, view, binding, lastInsertedChars):
-        """
-        try to do replacement with given a binding and last inserted chars
-
-        @param      self               The object
-        @param      view               The view object
-        @param      binding            A binding in `bindings` in the settings
-                                       file
-        @param      lastInsertedChars  The last inserted characters
-
-        @return     True/False on success/failure.
-        """
-
-        for search, replacement in binding['keymaps'].items():
-            # skip a keymap as early as possible
-            if not (
-                search.endswith(lastInsertedChars) or
-                lastInsertedChars.endswith(search)
-            ):
-                continue
-
-            regionsToBeReplaced = []
-
-            # iterate each region
-            # view.sel() returns all the regions for the carets (selections) that currently exist in the file, so you can do replacement at multiple carets
-            for region in view.sel():
-                # print('regions')
-                # print(region.begin())
-                # print(region.end())
-                checkRegion = sublime.Region(
-                    region.begin() - len(search),
-                    region.end()
-                )
-                # print('substr(checkRegion)')
-                # print(view.substr(checkRegion))
-                if view.substr(checkRegion) == search:
-                    regionsToBeReplaced.append((
-                        checkRegion.begin(),
-                        checkRegion.end()
-                    ))
-
-            if regionsToBeReplaced:
-                return view.run_command(PLUGIN_CMD, {
-                    'regions'     : regionsToBeReplaced,
-                    'replacement' : replacement,
-                })
-
-        return False
 
     def do_replace(self, view, replacement, num_chars_to_replace):
 
