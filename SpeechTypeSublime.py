@@ -40,15 +40,18 @@ class SpeechType:
     translate_cmd = namedtuple('translate_cmd', 'replacement, num_chars')
     insert_cmd = namedtuple('insert_cmd', 'replacement')
 
-    parse_words = ['parse','horse','parts',"par's",'kars','purse']
 
     def __init__(self,bindings):
         self.buffer = ''
         self.bindings = bindings
         self.cmd_history = []
+        self.active =  False
 
-    def add_chars(self,chars):
-        self.buffer += chars.lower()
+    def add_char(self,char):
+        if char == '\n':
+            self.buffer  = ''
+        else:
+            self.buffer += char.lower()
 
         print('self.buffer')
         print(self.buffer)
@@ -65,53 +68,81 @@ class SpeechType:
 
     def parse(self,verbose=False):
 
-        # Quick commands
-        if 'clear' in self.buffer:
-            if verbose: print('cleared buffer')
+        def make_scrubber():
             scrubber = self.translate_cmd(replacement='',num_chars=len(self.buffer))
             self.buffer = ''
-            return [scrubber]
+            return scrubber
+
+        if 'speech type on' in self.buffer:
+            if verbose: print('speech type activating')
+            self.active  = True
+            return [make_scrubber()]
+        elif 'speech type off' in self.buffer:
+            if verbose: print('speech type deactivating')
+            self.active  =  False
+            return [make_scrubber()]
+        elif 'clear' in self.buffer:
+            if verbose: print('cleared buffer, left text')
+            self.buffer = ''
+            return []
+        elif 'scrub' in self.buffer:
+            if verbose: print('cleared buffer, removed text')
+            return [make_scrubber()]
+
+        if self.active == False: 
+            return None
+
+        # Quick commands
         elif 'repeat' in self.buffer:
             if verbose: print('repeated last command')
-            scrubber = self.translate_cmd(replacement='',num_chars=len(self.buffer))
-            self.buffer = ''
-            return [scrubber,self.cmd_history[-1]]
+            return [make_scrubber(),self.cmd_history[-1]]
 
         # detailed, parsed commands
         cmd=self.buffer
-        match, word = check_any(self.parse_words,cmd)
+        match, word = check_any(self.bindings['parse_words'],cmd)
         if match:
             b = cmd.replace(word,'')
 
+            error = False
+
+            # special  parsing
             if 'letters' in cmd:
                 if verbose: print('replace: '+cmd)
                 
-                b = b.replace(' ','')
                 b = b.replace('letters','')
-                
-                if len(b) < 1:
-                    return self.NO_CMD, None
                 
                 for key in self.bindings['letters'].keys():
                     b = b.replace(key,self.bindings['letters'][key])
 
                 if verbose: print('with: '+b)
 
-                self.buffer = ''
-                trans = self.translate_cmd(replacement=b,num_chars=len(cmd))
-                
-                # and a vanilla insert to the command history
-                insert_b = b.replace('\n','')
-                insert = self.insert_cmd(replacement=insert_b)
-                self.add_to_cmd_hist(insert)
-                
-                return [trans]
+            # regular Python parsing
+            if verbose: print('replace: '+b)
+            
+            b = b.strip(' ')
+            # b = b.replace('\n','')
+            
+            for key in self.bindings['python_keymaps'].keys():
+                b = b.replace(key,self.bindings['python_keymaps'][key])
 
-            else:
-                self.buffer = ''
+            if verbose: print('with: '+b)
+
+             # cleanup
+            if error:
                 if verbose: print("couldn't parse: "+b)
-                if verbose: print('cleared buffer')
                 return None 
+
+            self.buffer = ''
+            trans = self.translate_cmd(replacement=b,num_chars=len(cmd))
+            
+            # and a vanilla insert to the command history
+            insert_b =  b.replace('\n','')
+            insert = self.insert_cmd(replacement=insert_b)
+            self.add_to_cmd_hist(insert)
+            
+            return [trans]
+
+            
 
         return None
 
@@ -210,7 +241,8 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         settings2 = sublime.load_settings(PLUGIN_SETTINGS)
         # print('yo1') 
         # print(settings.get('bindings','s'))
-        self.speech_type = SpeechType(settings2.get('bindings',[])[1])
+        # todo:  fix this
+        self.speech_type = SpeechType(settings2.get('bindings',[])[0])
         # self.speech_type = SpeechType([])
        
         print('yo2')
@@ -232,7 +264,7 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
         if historyCmd[0] == PLUGIN_CMD:
             return False
 
-        # print(v.command_history(0))
+        print(v.command_history(0))
         # print(v.change_count())
 
         # no action if we are not typing
@@ -244,7 +276,7 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
 
         # on_modified gets called for every single character addition, so we should only grab the last character to be added. 
         if len(lastInsertedChars) > 0:
-            self.speech_type.add_chars(lastInsertedChars[-1])
+            self.speech_type.add_char(lastInsertedChars[-1])
 
         # collect scopes from the selection
         # we expect the fact that most regions would have the same scope
@@ -261,7 +293,6 @@ class SpeechTypeSublimeListener(sublime_plugin.EventListener):
 
         # try possible working bindings
         for binding in settings.get('bindings', []):
-
             if sourceScopes & set(binding['syntax_list']):
 
                 cmds = self.speech_type.parse(verbose=True)

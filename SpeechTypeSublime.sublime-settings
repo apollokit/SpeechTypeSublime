@@ -10,35 +10,24 @@
     // - syntax name: It's package-dependent and as shown on the bottom-right corner of your ST windows.
     // - scope: ctrl+alt+shift+p shows it which is in the form of "source.xxx/text.xxx".
     "bindings": [
-    /*
-        {
-            // convert 'cmt ' into '<!--  -->' and place the cursor at its mid
-            "keymaps": {
-                "cmt ": "<!-- {|} -->"
-            },
-            // only works in HTML
-            "syntax_list": ["text.html", "text.html.basic"]
-        },
-        {
-            // convert 'fj ' into '$'
-            // convert 'dk ' into '->'
-            "keymaps": {
-                "fj ": "$",
-                "dk ": "->"
-            },
-            // only works in PHP
-            "syntax_list": ["source.php"]
-        },
-        {
-            // convert 'fj ' into '*'
-            // convert 'dk ' into '->'
-            "keymaps": {
-                "fj ": "*",
-                "dk ": "->"
-            },
-            // only works in C/C++
-            "syntax_list": ["source.c", "source.c++", "source.c++11"]
-        }
-    */
+        // {
+        //     // convert 'fj ' into '$'
+        //     // convert 'dk ' into '->'
+        //     "python_keymaps": {
+        //         "death": "def",
+        //         "equals": "=",
+        //          "false":  "False",
+        //          "true":  "True"
+        //     },
+        //     "parse_words": [
+        //         "parse", "horse",  "parts",  "par's", "kars", "purse", "pars"
+        //     ],
+        //     "letters": {
+        //         "alpha":"a",
+        //         "bravo":"b"
+        //     },
+        //     // only works in PHP
+        //     "syntax_list": ["Python"]
+        // }
     ]
 }
